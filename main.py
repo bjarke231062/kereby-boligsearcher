@@ -123,6 +123,7 @@ def check_site():
 # =====================
 
 print("🤖 Kereby-bot startet")
+send_email("Test fra Kereby-bot", "Hvis du får denne mail, virker det 👍")
 
 while True:
     check_site()
