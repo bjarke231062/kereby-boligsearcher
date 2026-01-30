@@ -3,20 +3,23 @@ from bs4 import BeautifulSoup
 import time
 import json
 import os
-import smtplib
-from email.mime.text import MIMEText
+
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+
 
 # =====================
-# KONFIGURATION
+# KONFIG
 # =====================
 
 URL = "https://kerebyudlejning.dk"
-CHECK_INTERVAL = 10  # sekunder
-
-EMAIL = os.getenv("EMAIL_USER")
-PASSWORD = os.getenv("EMAIL_PASS")
+CHECK_INTERVAL = 30  # sekunder (tjek hvert 30. sekund)
 
 SEEN_FILE = "seen.json"
+
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+FROM_EMAIL = os.getenv("FROM_EMAIL")
+
 
 # =====================
 # EMAIL
@@ -24,22 +27,22 @@ SEEN_FILE = "seen.json"
 
 def send_email(subject, body):
 
-    if not EMAIL or not PASSWORD:
-        print("❌ Mangler EMAIL_USER eller EMAIL_PASS")
+    if not SENDGRID_API_KEY or not FROM_EMAIL:
+        print("❌ Mangler SendGrid credentials")
         return
 
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = EMAIL
-    msg["To"] = EMAIL
+    message = Mail(
+        from_email=FROM_EMAIL,
+        to_emails=FROM_EMAIL,
+        subject=subject,
+        plain_text_content=body
+    )
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.starttls()
-            server.login(EMAIL, PASSWORD)
-            server.send_message(msg)
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
 
-        print("📧 Mail sendt")
+        print("📧 Mail sendt! Status:", response.status_code)
 
     except Exception as e:
         print("❌ Mail-fejl:", e)
@@ -63,6 +66,7 @@ def save_seen(seen):
 
 seen = load_seen()
 
+
 # =====================
 # SCRAPER
 # =====================
@@ -75,27 +79,26 @@ def check_site():
         r = requests.get(URL, timeout=15)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        cards = soup.find_all("a", href=True)
+        links = soup.find_all("a", href=True)
 
         found_new = False
 
-        for card in cards:
+        for link_tag in links:
 
-            text = card.get_text().lower()
+            text = link_tag.get_text().lower()
+            href = link_tag["href"]
 
             # Spring reserverede over
             if "reserveret" in text:
                 continue
 
-            link = card["href"]
-
-            if not link.startswith("/"):
+            if not href.startswith("/"):
                 continue
 
-            if "/bolig" not in link:
+            if "/bolig" not in href:
                 continue
 
-            full_url = "https://kerebyudlejning.dk" + link
+            full_url = "https://kerebyudlejning.dk" + href
 
             if full_url not in seen:
 
@@ -107,7 +110,7 @@ def check_site():
                 print("🏠 NY LEJLIGHED:", full_url)
 
                 send_email(
-                    "Ny ledig lejlighed på Kereby!",
+                    "🏠 Ny lejlighed på Kereby!",
                     f"Der er fundet en ny lejlighed:\n\n{full_url}"
                 )
 
@@ -119,12 +122,19 @@ def check_site():
 
 
 # =====================
-# MAIN LOOP
+# MAIN
 # =====================
 
 print("🤖 Kereby-bot startet")
-send_email("Test fra Kereby-bot", "Hvis du får denne mail, virker det 👍")
+
+# Test-mail ved opstart
+send_email(
+    "✅ Kereby-bot startet",
+    "Hvis du får denne mail, virker botten korrekt 👍"
+)
+
 
 while True:
+
     check_site()
     time.sleep(CHECK_INTERVAL)
