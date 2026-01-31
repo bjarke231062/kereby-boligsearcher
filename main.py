@@ -13,7 +13,7 @@ from sendgrid.helpers.mail import Mail
 # =====================
 
 URL = "https://kerebyudlejning.dk"
-CHECK_INTERVAL = 30  # sekunder (tjek hvert 30. sekund)
+CHECK_INTERVAL = 10  # sekunder (tjek hvert 10. sekund)
 
 SEEN_FILE = "seen.json"
 
